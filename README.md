@@ -44,6 +44,10 @@ source venv/bin/activate        # Windows: venv\Scripts\activate
 # 3. Install dependencies
 pip install -r requirements.txt
 
+# 3a. Confirm .gitignore is excluding what it should (run once, sanity check)
+git check-ignore -v .venv .env data/chroma logs/requests.jsonl
+# transcripts/ must NOT appear here — it's graded evidence, not a runtime artifact
+
 # 4. IMPORTANT — disable CrewAI's default outbound telemetry call before running
 #    anything (see Submission Guidelines: crew.kickoff() phones home by default).
 export CREWAI_DISABLE_TELEMETRY=true      # Windows: set CREWAI_DISABLE_TELEMETRY=true
@@ -59,7 +63,7 @@ python build_index.py
 # 7. Run the test/demo transcripts for each part
 python demo_part1_rag.py
 python demo_part2_crew.py
-python demo_part3_api.py          # or: uvicorn api.main:app --reload
+python demo_part3_api.py          # or: uvicorn app.api.main:app --reload
 python demo_part4_governance.py
 ```
 
@@ -76,35 +80,50 @@ No outbound network call is made anywhere in the graded transcripts.
 ├── README.md                      # this file
 ├── requirements.txt
 ├── .env.example                   # MOCK_LLM=true, CREWAI_DISABLE_TELEMETRY=true, etc.
-├── dataset.py                     # Task 1 — SUPPORT_TICKETS generator
-├── knowledge_base/                # Task 2 — 12 policy documents (.md)
-├── chunking.py                    # Task 3 — fixed-size + sentence-based chunkers
+├── .gitignore                     # excludes .venv, .env, *.db, __pycache__, data/chroma/, logs/*.jsonl
+├── dataset.py                     # Task 1 — SUPPORT_TICKETS generator (root-level, per brief)
 ├── build_index.py                 # embeds + indexes both chunking strategies into Chroma
-├── rag.py                         # Task 4 — grounded generation + threshold calibration
-├── evaluation/
+├── app/                           # main application package
+│   ├── __init__.py
+│   ├── config.py                  # business constants: escalation threshold, cost cap, PII patterns
+│   ├── models.py                  # Task 9 — Pydantic response schema; Task 14 verdict model
+│   ├── chunking.py                # Task 3 — fixed-size + sentence-based chunkers
+│   ├── rag.py                     # Task 4 — grounded generation + threshold calibration
+│   ├── mock_llm.py                # MOCK_LLM as a crewai.llms.base_llm.BaseLLM subclass
+│   ├── memory.py                  # Task 8 — session memory (LangChain)
+│   ├── guardrails.py              # Task 10 — PII masking, prompt-injection, groundedness
+│   ├── governance.py              # Task 15 — least-autonomy guard, risk classification, cost cap
+│   ├── cache.py                   # Task 16 — response cache
+│   ├── crew.py                    # Task 7 — 3-agent CrewAI crew definition
+│   ├── review_stage.py            # Task 14 — Autogen RoundRobinGroupChat review team
+│   ├── tools/
+│   │   ├── __init__.py
+│   │   ├── rag_tool.py            # RAG tool wrapper for the Retrieval Agent
+│   │   └── ticket_lookup_tool.py  # Task 6 — check_support_ticket_status()
+│   └── api/
+│       ├── __init__.py
+│       ├── main.py                # Task 11 — FastAPI app (2+ HTTP endpoints + WebSocket)
+│       └── logging_middleware.py  # Task 12 — JSON-Lines structured logging (PII-masked)
+├── data/
+│   ├── knowledge_base/            # Task 2 — 12 policy documents (.md)
+│   └── chroma/                    # generated vector store (gitignored, rebuilt by build_index.py)
+├── eval/
 │   ├── retrieval_eval.py          # Task 5 — precision/recall per collection
-│   └── llm_judge_eval.py          # Task 13 — Accuracy/Grounding/Completeness/Safety
-├── tools/
-│   ├── rag_tool.py                # RAG tool wrapper for the Retrieval Agent
-│   └── ticket_lookup_tool.py      # Task 6 — check_support_ticket_status()
-├── mock_llm.py                    # Task: MOCK_LLM as a crewai.llms.base_llm.BaseLLM subclass
-├── crew.py                        # Task 7 — 3-agent CrewAI crew definition
-├── memory.py                      # Task 8 — session memory (LangChain)
-├── schemas.py                     # Task 9 — Pydantic response schema; Task 14 verdict model
-├── guardrails.py                  # Task 10 — PII masking, prompt-injection, groundedness
-├── governance.py                  # Task 15 — least-autonomy guard, risk classification, cost cap
-├── cache.py                       # Task 16 — response cache
-├── review_stage.py                # Task 14 — Autogen RoundRobinGroupChat review team
-├── api/
-│   ├── main.py                    # Task 11 — FastAPI app (2+ HTTP endpoints + WebSocket)
-│   └── logging_middleware.py      # Task 12 — JSON-Lines structured logging (PII-masked)
-├── logs/                          # generated JSON-Lines request logs (gitignored contents, .gitkeep)
+│   ├── llm_judge_eval.py          # Task 13 — Accuracy/Grounding/Completeness/Safety
+│   └── test_queries.json          # the 15 queries used for Task 13
 ├── demo_part1_rag.py              # runnable transcript for Part 1
 ├── demo_part2_crew.py             # runnable transcript for Part 2
 ├── demo_part3_api.py              # runnable transcript for Part 3
 ├── demo_part4_governance.py       # runnable transcript for Part 4
-└── transcripts/                   # saved output logs from each demo script, for grading
+├── logs/                          # runtime JSON-Lines request logs (gitignored contents, .gitkeep)
+└── transcripts/                   # saved output evidence from each demo script — NOT gitignored,
+                                    # this is graded deliverable content
 ```
+
+> **Note on `.gitignore`:** it correctly excludes `.venv`, `.env`, `*.db`, `__pycache__/`,
+> `data/chroma/` (regenerable vector store), and `logs/*.jsonl` (runtime logs) — but
+> **deliberately does not exclude `transcripts/`**, since those files are required
+> grading evidence, not local runtime artifacts.
 
 ---
 
@@ -120,7 +139,7 @@ No outbound network call is made anywhere in the graded transcripts.
 | Number of records | `<N>` (≥40 required) | |
 | Category weights | `Billing: <x>%, Technical Issue: <x>%, Account Access: <x>%, Product Defect: <x>%, General Inquiry: <x>%` | Chosen so every category clears the ≥3-record minimum with margin |
 | Status weights | `Open: <x>%, In Progress: <x>%, Escalated: <x>%, Resolved: <x>%, Closed: <x>%` | Every status guaranteed ≥1 record |
-| `resolution_time_hours` range | `<min>`–`<max>` hours | One-sentence reasoning: `<e.g., "Ola's own SLA policy (see knowledge_base/sla_by_severity.md) caps critical-issue resolution at 24h and low-priority at 96h, so the sampled range spans slightly beyond that band to include both on-SLA and breached cases.">` |
+| `resolution_time_hours` range | `<min>`–`<max>` hours | One-sentence reasoning: `<e.g., "Ola's own SLA policy (see data/knowledge_base/sla_by_severity.md) caps critical-issue resolution at 24h and low-priority at 96h, so the sampled range spans slightly beyond that band to include both on-SLA and breached cases.">` |
 | `days_since_created` range | 0–30 (fixed by brief) | |
 | `escalated=True` percentage achieved | `<x>%` (must be 10–30%) | Achieved on seed `<SEED>` without hand-editing individual records |
 
@@ -147,7 +166,7 @@ escalated=True: 17.5% (7/40)
 
 ### Task 2 — Knowledge base
 
-12 documents in `knowledge_base/`, covering every required topic: ticket-priority
+12 documents in `data/knowledge_base/`, covering every required topic: ticket-priority
 classification rules, SLA-by-severity policy, escalation matrix, refund/compensation
 policy, customer-communication-channel policy, business-hours/holiday-support policy,
 repeat-complaint-handling policy, service-credit policy, feedback-collection process,
@@ -156,7 +175,7 @@ policy for tickets.
 
 ### Task 3 — Chunking strategies
 
-Two chunking strategies implemented in `chunking.py`, embedded with a local
+Two chunking strategies implemented in `app/chunking.py`, embedded with a local
 SentenceTransformers model, and indexed into two separate ChromaDB collections:
 
 | Collection name | Strategy | Chunk size / overlap (or sentence rule) |
@@ -166,7 +185,7 @@ SentenceTransformers model, and indexed into two separate ChromaDB collections:
 
 ### Task 4 — Grounded generation & threshold calibration
 
-> **[TODO: fill in after running the calibration step in `rag.py`]**
+> **[TODO: fill in after running the calibration step in `app/rag.py`]**
 
 Measured top-1 cosine similarity, in-scope vs. out-of-scope queries:
 
@@ -187,7 +206,7 @@ Demonstrated on ≥5 in-scope queries + 1 out-of-scope fallback query — see
 
 ### Task 5 — Chunking strategy evaluation
 
-> **[TODO: fill in after running `evaluation/retrieval_eval.py`]**
+> **[TODO: fill in after running `eval/retrieval_eval.py`]**
 
 | Query | `ola_policies_fixed` P / R | `ola_policies_sentence` P / R |
 |---|---|---|
@@ -216,11 +235,11 @@ escalation_score = <TODO: exact formula, e.g.>
 
 Escalation recommended above **`<threshold>`**, corresponding to the
 **`<percentile>`th percentile** of `days_since_created` in the generated dataset
-(`<value>` days) — see `tools/ticket_lookup_tool.py` for the exact computation.
+(`<value>` days) — see `app/tools/ticket_lookup_tool.py` for the exact computation.
 
 ### Task 7 — CrewAI crew
 
-3 agents defined in `crew.py`:
+3 agents defined in `app/crew.py`:
 - **Retrieval Agent** — equipped with the RAG tool (Tasks 3–5)
 - **Lookup Agent** — equipped with `check_support_ticket_status` (Task 6)
 - **Response Composer** — combines both outputs into one final draft
@@ -236,7 +255,7 @@ correctly absent. In-process only, per brief (does not need to survive a restart
 
 ### Task 9 — Structured output schema
 
-Every crew response validated against `schemas.py::AgentResponse` (Pydantic).
+Every crew response validated against `app/models.py::AgentResponse` (Pydantic).
 
 ### Task 10 — Guardrails
 
@@ -261,7 +280,7 @@ Every crew response validated against `schemas.py::AgentResponse` (Pydantic).
 | `POST` | `/add-document` | Add a new policy document to the knowledge base at runtime |
 | `WS` | `/chat` | Real-time multi-turn chat; gracefully handles `WebSocketDisconnect` |
 
-Run locally: `uvicorn api.main:app --reload` → interactive docs at
+Run locally: `uvicorn app.api.main:app --reload` → interactive docs at
 `http://localhost:8000/docs`.
 
 ### Task 12 — Structured logging
@@ -273,7 +292,7 @@ the phone number never reaches disk in the clear. See
 
 ### Task 13 — Evaluation at scale
 
-> **[TODO: fill in after running `evaluation/llm_judge_eval.py`]**
+> **[TODO: fill in after running `eval/llm_judge_eval.py`]**
 
 15 test queries (≥1 per KB topic + ≥2 out-of-scope/edge-case), scored on Accuracy,
 Grounding, Completeness, Safety — full per-query table in
@@ -303,7 +322,7 @@ Demonstrated:
 
 - **Application layer (least autonomy):** only the Lookup Agent is wired to
   `check_support_ticket_status`; no other agent has this tool in its toolset. See
-  `governance.py` and `transcripts/part4_least_autonomy.txt` for the demonstration
+  `app/governance.py` and `transcripts/part4_least_autonomy.txt` for the demonstration
   that a non-Lookup agent cannot invoke it.
 - **Risk classification: Medium.** This system falls under the brief's own given
   Medium-risk example — "customer support tickets." It does not process medical
@@ -312,12 +331,12 @@ Demonstrated:
   makes escalation-relevant judgments and answers policy questions that affect a
   user's next action. `<TODO: expand to a full one-paragraph justification.>`
 - **Runtime layer (cost cap):** per-request token/cost budget enforced in
-  `governance.py`; an oversized simulated request is correctly rejected — see
+  `app/governance.py`; an oversized simulated request is correctly rejected — see
   `transcripts/part4_cost_cap_rejection.txt`.
 
 ### Task 16 — Response caching
 
-In-memory cache keyed by normalized query text (`cache.py`). Before/after evidence
+In-memory cache keyed by normalized query text (`app/cache.py`). Before/after evidence
 (call counter or timing) for a repeated identical query in
 `transcripts/part4_cache_hit.txt`.
 

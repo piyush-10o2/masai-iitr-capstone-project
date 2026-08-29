@@ -1,0 +1,13 @@
+﻿fastapi
+uvicorn
+pydantic
+python-dotenv
+chromadb
+langchain
+langchain-chroma
+langchain-huggingface
+sentence-transformers
+crewai
+autogen-agentchat
+autogen-ext
+websockets
