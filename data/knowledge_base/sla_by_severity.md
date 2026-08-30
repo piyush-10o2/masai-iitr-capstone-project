@@ -1,0 +1,3 @@
+# SLA by Severity
+
+Ola's support SLA sets a maximum acknowledgment and resolution window for each severity tier. Critical tickets must be acknowledged within 1 hour and resolved within 8 hours, given their safety or payment-blocking nature. High-severity tickets must be acknowledged within 4 hours and resolved within 24 hours. Medium-severity tickets must be acknowledged within 12 hours and resolved within 72 hours. Low-severity tickets must be acknowledged within 24 hours and resolved within 96 hours, the outer bound of Ola's standard support queue. A ticket that exceeds its severity tier's resolution window without being closed is automatically flagged for the escalation matrix described separately.
